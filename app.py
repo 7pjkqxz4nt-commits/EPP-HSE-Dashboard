@@ -1,5 +1,3 @@
-import plotly.io as pio
-from reportlab.platypus import Image
 import streamlit as st
 import pandas as pd
 import plotly.express as px
