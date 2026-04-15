@@ -177,6 +177,25 @@ st.markdown("## 📊 Executive KPI Overview")
 col1, col2, col3 = st.columns(3)
 
 with col1:
+   # =========================
+# KPI CALCULATION
+# =========================
+total_manhours = df["Manhours"].sum()
+total_lti = df["LWDC"].sum()
+total_recordable = df["LWDC"].sum() + df["MTC"].sum() + df["FAC"].sum()
+
+TRIR = (total_recordable * 200000) / total_manhours if total_manhours else 0
+LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
+
+
+# =========================
+# KPI DISPLAY (AFTER CALCULATION)
+# =========================
+st.markdown("## 📊 Executive KPI Overview")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
     st.metric("TRIR", round(TRIR, 2))
 
 with col2:
