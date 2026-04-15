@@ -177,8 +177,13 @@ st.markdown("## 📊 Executive KPI Overview")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    with col1:
     st.metric("TRIR", round(TRIR, 2))
+
+with col2:
+    st.metric("LTIFR", round(LTIFR, 2))
+
+with col3:
+    st.metric("Total Recordable", int(total_recordable))
 # =========================
 # KPI CALCULATION (OUTSIDE)
 # =========================
