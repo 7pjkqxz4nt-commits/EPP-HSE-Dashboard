@@ -32,10 +32,9 @@ def send_email(pdf_buffer, receiver_email):
         filename='HSE_Report.pdf'
     )
 
-    with smtplib.SMTP('smtp.office365.com', 587) as smtp:
-        smtp.starttls()
-        smtp.login(sender_email, password)
-        smtp.send_message(msg)
+  with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+    smtp.login(sender_email, app_password)
+    smtp.send_message(msg)
 
 # =========================
 # UPLOAD FILE
