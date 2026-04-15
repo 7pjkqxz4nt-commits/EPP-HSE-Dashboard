@@ -332,7 +332,13 @@ if st.button("Generate PDF"):
     fig = px.line(trend, x="Month", y="LWDC", title="LTI Trend")
 
     import plotly.io as pio
-    pio.write_image(fig, "lti_chart.png")
+    plt.figure()
+plt.plot(trend["Month"], trend["LWDC"])
+plt.title("LTI Trend")
+plt.xticks(rotation=45)
+
+plt.savefig("lti_chart.png", bbox_inches="tight")
+plt.close()
 
     pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
     st.session_state["pdf"] = pdf
