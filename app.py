@@ -118,6 +118,7 @@ if file:
     # =========================
 def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
 
+    from reportlab.platypus import Image
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet
@@ -172,6 +173,18 @@ def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
             styles['Normal']
         ))
 
+   # =========================
+# ADD CHART TO PDF
+# =========================
+content.append(Spacer(1, 20))
+content.append(Paragraph("LTI Trend Chart", styles['Heading2']))
+content.append(Spacer(1, 10))
+
+try:
+    img = Image("lti_chart.png", width=400, height=200)
+    content.append(img)
+except:
+    content.append(Paragraph("Chart could not be loaded", styles['Normal']))
     doc.build(content)
     buffer.seek(0)
 
