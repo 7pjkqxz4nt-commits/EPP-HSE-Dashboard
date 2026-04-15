@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-st.title("🦺 HSE Enterprise KPI Dashboard")
+st.title("🦺 HSE Enterprise Dashboard")
 
 # =========================
 # Upload File
@@ -41,6 +41,29 @@ if uploaded_file:
         df = df[df[date_col] != "Annual Planned"]
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
 
+        df["Year"] = df[date_col].dt.year
+        df["Month"] = df[date_col].dt.month_name()
+
+    # =========================
+    # SIDEBAR FILTERS
+    # =========================
+    st.sidebar.header("🔎 Filters")
+
+    if date_col:
+        selected_year = st.sidebar.multiselect(
+            "Select Year",
+            sorted(df["Year"].dropna().unique()),
+            default=sorted(df["Year"].dropna().unique())
+        )
+
+        selected_month = st.sidebar.multiselect(
+            "Select Month",
+            df["Month"].dropna().unique(),
+            default=df["Month"].dropna().unique()
+        )
+
+        df = df[(df["Year"].isin(selected_year)) & (df["Month"].isin(selected_month))]
+
     # =========================
     # KPI CALCULATIONS
     # =========================
@@ -52,7 +75,7 @@ if uploaded_file:
     LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
     # =========================
-    # TARGET INPUT
+    # TARGETS
     # =========================
     st.sidebar.header("🎯 KPI Targets")
 
@@ -61,13 +84,12 @@ if uploaded_file:
     target_incidents = st.sidebar.number_input("Incident Target", value=10)
 
     # =========================
-    # KPI SCORE FUNCTION
+    # KPI SCORE
     # =========================
     def kpi_score(actual, target):
         if target == 0:
             return 0
-        score = max(0, min(100, (target / actual) * 100 if actual > 0 else 100))
-        return round(score, 1)
+        return max(0, min(100, (target / actual) * 100 if actual > 0 else 100))
 
     score_trir = kpi_score(TRIR, target_trir)
     score_ltifr = kpi_score(LTIFR, target_ltifr)
@@ -80,42 +102,92 @@ if uploaded_file:
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric("TRIR", round(TRIR, 2), f"Score: {score_trir}%")
-    col2.metric("LTIFR", round(LTIFR, 2), f"Score: {score_ltifr}%")
-    col3.metric("Incidents", int(total_incidents), f"Score: {score_incidents}%")
+    col1.metric("TRIR", round(TRIR, 2), f"{round(score_trir,1)}%")
+    col2.metric("LTIFR", round(LTIFR, 2), f"{round(score_ltifr,1)}%")
+    col3.metric("Incidents", int(total_incidents), f"{round(score_incidents,1)}%")
 
     # =========================
-    # TREND ANALYSIS
+    # TREND
     # =========================
     if date_col:
-        df["Year"] = df[date_col].dt.year
-        df["Month"] = df[date_col].dt.to_period("M").astype(str)
+        df["Month_Year"] = df[date_col].dt.to_period("M").astype(str)
+        trend = df.groupby("Month_Year").sum(numeric_only=True).reset_index()
 
-        trend = df.groupby("Month").sum(numeric_only=True).reset_index()
-        yearly = df.groupby("Year").sum(numeric_only=True).reset_index()
-
-        st.subheader("📈 Monthly Trend")
+        st.subheader("📈 Trends")
 
         if incident_col:
-            fig1 = px.line(trend, x="Month", y=incident_col, title="Incident Trend")
+            fig1 = px.line(trend, x="Month_Year", y=incident_col, title="Incident Trend")
             st.plotly_chart(fig1, use_container_width=True)
 
-    # =========================
-    # BENCHMARKING
-    # =========================
-    st.subheader("📊 Yearly Benchmark")
-
-    if date_col:
-        if incident_col:
-            fig2 = px.bar(yearly, x="Year", y=incident_col, title="Incidents by Year")
+        if manhours_col:
+            fig2 = px.line(trend, x="Month_Year", y=manhours_col, title="Manhours Trend")
             st.plotly_chart(fig2, use_container_width=True)
 
-        if manhours_col:
-            fig3 = px.bar(yearly, x="Year", y=manhours_col, title="Manhours by Year")
-            st.plotly_chart(fig3, use_container_width=True)
+    # =========================
+    # TRIR / LTIFR TREND
+    # =========================
+    if incident_col and manhours_col:
+        trend["TRIR"] = (trend[incident_col] * 200000) / trend[manhours_col]
+        trend["LTIFR"] = (trend.get(lti_col, 0) * 1000000) / trend[manhours_col] if lti_col else 0
+
+        st.subheader("📉 TRIR & LTIFR Trend")
+
+        fig3 = px.line(trend, x="Month_Year", y="TRIR", title="TRIR Trend")
+        st.plotly_chart(fig3, use_container_width=True)
+
+        fig4 = px.line(trend, x="Month_Year", y="LTIFR", title="LTIFR Trend")
+        st.plotly_chart(fig4, use_container_width=True)
 
     # =========================
-    # PERFORMANCE RATING
+    # HEATMAP (IMPORTANT)
+    # =========================
+    st.subheader("🔥 Incident Heatmap (Month vs Year)")
+
+    if incident_col and date_col:
+        heatmap_data = df.pivot_table(
+            values=incident_col,
+            index="Year",
+            columns="Month",
+            aggfunc="sum"
+        )
+
+        fig_heatmap = px.imshow(
+            heatmap_data,
+            text_auto=True,
+            aspect="auto",
+            title="Incident Heatmap"
+        )
+
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+
+    # =========================
+    # SCATTER
+    # =========================
+    st.subheader("📊 Incidents vs Manhours")
+
+    if incident_col and manhours_col:
+        fig5 = px.scatter(
+            df,
+            x=manhours_col,
+            y=incident_col,
+            trendline="ols",
+            title="Incidents vs Manhours"
+        )
+        st.plotly_chart(fig5, use_container_width=True)
+
+    # =========================
+    # CUMULATIVE
+    # =========================
+    st.subheader("📈 Cumulative Incidents")
+
+    if incident_col:
+        trend["Cumulative"] = trend[incident_col].cumsum()
+
+        fig6 = px.line(trend, x="Month_Year", y="Cumulative", title="Cumulative Incidents")
+        st.plotly_chart(fig6, use_container_width=True)
+
+    # =========================
+    # PERFORMANCE
     # =========================
     st.subheader("🏆 Overall Performance")
 
@@ -128,15 +200,13 @@ if uploaded_file:
     else:
         rating = "🔴 Needs Improvement"
 
-    st.metric("Overall HSE Score", f"{round(avg_score,1)}%", rating)
+    st.metric("Overall Score", f"{round(avg_score,1)}%", rating)
 
     # =========================
     # INSIGHTS
     # =========================
-    st.subheader("🤖 Executive Insights")
+    st.subheader("🤖 Insights")
 
-    st.write(f"Overall performance rating: **{rating}**")
-
-    if date_col and incident_col:
-        worst_year = yearly.loc[yearly[incident_col].idxmax(), "Year"]
-        st.write(f"🚨 Highest incident year: **{worst_year}**")
+    if incident_col:
+        worst = trend.loc[trend[incident_col].idxmax(), "Month_Year"]
+        st.write(f"🚨 Highest incident month: **{worst}**")
