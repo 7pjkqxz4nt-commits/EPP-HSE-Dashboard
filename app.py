@@ -16,7 +16,7 @@ st.title("🦺 HSE Professional Dashboard")
 def send_email(pdf_buffer, receiver_email):
 
     sender_email = st.secrets["EMAIL"]
-    password = st.secrets["APP_PASSWORD"]  # your Hotmail password
+    app_password = st.secrets["APP_PASSWORD"]
 
     msg = EmailMessage()
     msg['Subject'] = "HSE KPI Report"
@@ -32,9 +32,9 @@ def send_email(pdf_buffer, receiver_email):
         filename='HSE_Report.pdf'
     )
 
-  with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-    smtp.login(sender_email, app_password)
-    smtp.send_message(msg)
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(sender_email, app_password)
+        smtp.send_message(msg)
 
 # =========================
 # UPLOAD FILE
