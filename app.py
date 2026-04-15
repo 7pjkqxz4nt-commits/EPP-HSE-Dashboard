@@ -176,16 +176,34 @@ def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
    # =========================
 # ADD CHART TO PDF
 # =========================
-content.append(Spacer(1, 20))
-content.append(Paragraph("LTI Trend Chart", styles['Heading2']))
-content.append(Spacer(1, 10))
+def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
 
-try:
-    img = Image("lti_chart.png", width=400, height=200)
-    content.append(img)
-except:
-    content.append(Paragraph("Chart could not be loaded", styles['Normal']))
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+    from reportlab.lib.styles import getSampleStyleSheet
+    from io import BytesIO
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+
+    content = []
+
+    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
+    content.append(Spacer(1, 10))
+
+    content.append(Paragraph(f"TRIR: {round(TRIR,2)}", styles['Normal']))
+    content.append(Paragraph(f"LTIFR: {round(LTIFR,2)}", styles['Normal']))
+
+    # IMPORTANT → chart
+    try:
+        from reportlab.platypus import Image
+        img = Image("lti_chart.png", width=400, height=200)
+        content.append(img)
+    except:
+        content.append(Paragraph("Chart not available", styles['Normal']))
+
     doc.build(content)
+
     buffer.seek(0)
 
     return buffer
