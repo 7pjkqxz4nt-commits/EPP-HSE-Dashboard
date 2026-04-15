@@ -294,17 +294,17 @@ def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
     # =========================
    st.subheader("📄 Reporting")
 
-# Generate PDF button
+# Generate PDF
 if st.button("Generate PDF"):
     pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
     st.session_state["pdf"] = pdf
     st.success("PDF generated!")
 
-# Download button (only appears after generation)
+# Download
 if "pdf" in st.session_state:
     st.download_button("Download PDF", st.session_state["pdf"], "HSE_Report.pdf")
 
-# Email section
+# Email
 st.subheader("📧 Send Report")
 
 email_to = st.text_input("Enter Email Address")
