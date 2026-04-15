@@ -1,106 +1,90 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
+# =========================
+# CLEAN DATA (IMPORTANT)
+# =========================
+df = df[df["Date"].notna()]  # remove empty rows
+df = df[df["Date"] != "Annual Planned"]
 
-st.set_page_config(layout="wide")
-st.title("🦺 HSE Annual KPI Dashboard")
+# Convert date
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
 # =========================
-# Upload File
+# KPI CALCULATIONS
 # =========================
-uploaded_file = st.file_uploader("Upload HSE KPI File", type=["xlsx"])
+st.subheader("📊 Advanced KPIs")
 
-if uploaded_file:
+total_manhours = df["EPP Total Worked Man-Hrs"].sum()
+safe_manhours = df["EPP Safe worked man-HRs"].sum()
 
-    # Read file (adjust header if needed)
-    df = pd.read_excel(uploaded_file)
+# Example columns (adjust if needed)
+lti_col = [c for c in df.columns if "lti" in c.lower()]
+incident_col = [c for c in df.columns if "incident" in c.lower()]
 
-    st.subheader("📋 Data Preview")
-    st.dataframe(df.head())
+lti = df[lti_col[0]].sum() if lti_col else 0
+incidents = df[incident_col[0]].sum() if incident_col else len(df)
 
-    # =========================
-    # CLEAN COLUMN NAMES
-    # =========================
-    df.columns = df.columns.str.strip()
+TRIR = (incidents * 200000) / total_manhours if total_manhours else 0
+LTIFR = (lti * 1000000) / total_manhours if total_manhours else 0
 
-    # =========================
-    # COLUMN DETECTION
-    # =========================
-    cols = df.columns
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Manhours", int(total_manhours))
+col2.metric("Incidents", int(incidents))
+col3.metric("TRIR", round(TRIR, 2))
+col4.metric("LTIFR", round(LTIFR, 2))
 
-    # Try to detect important columns
-    date_col = [c for c in cols if "month" in c.lower() or "date" in c.lower()]
-    manhours_col = [c for c in cols if "man" in c.lower()]
-    lti_col = [c for c in cols if "lti" in c.lower()]
-    incident_col = [c for c in cols if "incident" in c.lower() or "case" in c.lower()]
+# =========================
+# TREND ANALYSIS
+# =========================
+st.subheader("📈 Trends Over Time")
 
-    date_col = date_col[0] if date_col else cols[0]
-    manhours_col = manhours_col[0] if manhours_col else None
-    lti_col = lti_col[0] if lti_col else None
-    incident_col = incident_col[0] if incident_col else None
+df["Month"] = df["Date"].dt.to_period("M").astype(str)
 
-    # =========================
-    # KPI CALCULATIONS
-    # =========================
-    st.subheader("📊 HSE KPIs")
+trend = df.groupby("Month").sum(numeric_only=True).reset_index()
 
-    total_manhours = df[manhours_col].sum() if manhours_col else 0
-    total_incidents = df[incident_col].sum() if incident_col else len(df)
-    total_lti = df[lti_col].sum() if lti_col else 0
+# Incidents trend
+if incident_col:
+    fig1 = px.line(trend, x="Month", y=incident_col[0], title="Incident Trend")
+    st.plotly_chart(fig1, use_container_width=True)
 
-    # TRIR & LTIFR
-    TRIR = (total_incidents * 200000) / total_manhours if total_manhours else 0
-    LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
+# Manhours trend
+fig2 = px.line(trend, x="Month", y="EPP Total Worked Man-Hrs", title="Manhours Trend")
+st.plotly_chart(fig2, use_container_width=True)
 
-    col1, col2, col3, col4 = st.columns(4)
+# =========================
+# ROLLING AVERAGE (VERY IMPORTANT)
+# =========================
+st.subheader("📉 Rolling Trend (3 Months)")
 
-    col1.metric("Total Manhours", int(total_manhours))
-    col2.metric("Total Incidents", int(total_incidents))
-    col3.metric("LTI", int(total_lti))
-    col4.metric("TRIR", round(TRIR, 2))
+if incident_col:
+    trend["Rolling Avg"] = trend[incident_col[0]].rolling(3).mean()
 
-    st.metric("LTIFR", round(LTIFR, 2))
+    fig3 = px.line(
+        trend,
+        x="Month",
+        y=["Rolling Avg"],
+        title="3-Month Moving Average"
+    )
+    st.plotly_chart(fig3, use_container_width=True)
 
-    # =========================
-    # TREND ANALYSIS
-    # =========================
-    st.subheader("📈 Monthly Trend")
+# =========================
+# YEARLY COMPARISON
+# =========================
+st.subheader("📊 Yearly Comparison")
 
-    try:
-        fig = px.line(df, x=date_col, y=incident_col, title="Incidents Over Time")
-        st.plotly_chart(fig, use_container_width=True)
-    except:
-        st.warning("Check date or incident column")
+df["Year"] = df["Date"].dt.year
 
-    # =========================
-    # KPI COMPARISON
-    # =========================
-    st.subheader("📊 KPI Comparison")
+yearly = df.groupby("Year").sum(numeric_only=True).reset_index()
 
-    numeric_cols = df.select_dtypes(include="number").columns
+fig4 = px.bar(yearly, x="Year", y="EPP Total Worked Man-Hrs", title="Yearly Manhours")
+st.plotly_chart(fig4, use_container_width=True)
 
-    selected_kpi = st.selectbox("Select KPI", numeric_cols)
+# =========================
+# INSIGHTS
+# =========================
+st.subheader("🤖 Insights")
 
-    fig2 = px.bar(df, x=date_col, y=selected_kpi, title=f"{selected_kpi} by Month")
-    st.plotly_chart(fig2, use_container_width=True)
+if incident_col:
+    worst_month = trend.loc[trend[incident_col[0]].idxmax(), "Month"]
+    st.write(f"🚨 Highest incidents occurred in: **{worst_month}**")
 
-    # =========================
-    # LEADING VS LAGGING
-    # =========================
-    st.subheader("⚖️ Leading vs Lagging Indicators")
-
-    st.write("Numeric KPIs Overview:")
-    st.dataframe(df[numeric_cols].describe())
-
-    # =========================
-    # INSIGHTS
-    # =========================
-    st.subheader("🤖 Insights")
-
-    if incident_col:
-        peak_month = df.loc[df[incident_col].idxmax(), date_col]
-        st.write(f"🚨 Highest incidents occurred in: **{peak_month}**")
-
-    if lti_col:
-        worst_lti = df.loc[df[lti_col].idxmax(), date_col]
-        st.write(f"⚠️ Highest LTI month: **{worst_lti}**")
+best_month = trend.loc[trend["EPP Total Worked Man-Hrs"].idxmax(), "Month"]
+st.write(f"🏆 Highest productivity month: **{best_month}**")
