@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 import smtplib
@@ -41,39 +41,20 @@ def send_email(pdf_buffer, receiver_email):
 # =========================
 def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
 
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image, PageBreak
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib import colors
-    from io import BytesIO
-
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer)
     styles = getSampleStyleSheet()
-
     content = []
 
-    # =========================
-    # TITLE PAGE
-    # =========================
     content.append(Paragraph("HSE EXECUTIVE REPORT", styles['Title']))
     content.append(Spacer(1, 20))
-
-    content.append(Paragraph("Health, Safety & Environment Performance Summary", styles['Normal']))
-    content.append(Spacer(1, 40))
-
     content.append(PageBreak())
-
-    # =========================
-    # KPI SUMMARY
-    # =========================
-    content.append(Paragraph("1. KPI Summary", styles['Heading2']))
-    content.append(Spacer(1, 10))
 
     kpi_data = [
         ["Metric", "Value"],
         ["TRIR", round(TRIR, 2)],
         ["LTIFR", round(LTIFR, 2)],
-        ["Total Recordable Cases", int(total_recordable)]
+        ["Total Recordable", int(total_recordable)]
     ]
 
     table = Table(kpi_data)
@@ -86,54 +67,17 @@ def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
     content.append(table)
     content.append(Spacer(1, 20))
 
-    # =========================
-    # INCIDENT SUMMARY
-    # =========================
-    content.append(Paragraph("2. Incident Breakdown", styles['Heading2']))
-
-    content.append(Paragraph(f"LTI Cases: {df['LWDC'].sum()}", styles['Normal']))
-    content.append(Paragraph(f"Medical Cases: {df['MTC'].sum()}", styles['Normal']))
-    content.append(Paragraph(f"First Aid Cases: {df['FAC'].sum()}", styles['Normal']))
-
-    content.append(Spacer(1, 20))
-
-    # =========================
-    # CHARTS
-    # =========================
-    content.append(Paragraph("3. Performance Trends", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    charts = ["lti_chart.png", "trir_chart.png", "manhours_chart.png", "nearmiss_chart.png"]
+    charts = ["lti_chart.png", "trir_chart.png", "manhours_chart.png"]
 
     for chart in charts:
         try:
             content.append(Image(chart, width=450, height=220))
-            content.append(Spacer(1, 15))
+            content.append(Spacer(1, 10))
         except:
             pass
 
-    # =========================
-    # INSIGHTS
-    # =========================
-    content.append(Paragraph("4. Executive Insights", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    worst_month = trend.loc[trend["LWDC"].idxmax(), "Month"]
-
-    content.append(Paragraph(f"Highest incident month: {worst_month}", styles['Normal']))
-
-    if TRIR < 1:
-        performance = "Excellent"
-    elif TRIR < 3:
-        performance = "Good"
-    else:
-        performance = "Needs Improvement"
-
-    content.append(Paragraph(f"Overall Performance: {performance}", styles['Normal']))
-
     doc.build(content)
     buffer.seek(0)
-
     return buffer
 
 # =========================
@@ -152,14 +96,16 @@ if file:
         "EPP Total  Worked Man-HRs",
         "Contractor Total  Worked Man-HRs",
         "LWDC", "MTC", "FAC",
-        "Near Miss Reports",
-        "Number of risk assessment"
+        "Near Miss Reports"
     ]
 
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
+    # =========================
+    # CALCULATIONS
+    # =========================
     df["Manhours"] = df["EPP Total  Worked Man-HRs"] + df["Contractor Total  Worked Man-HRs"]
 
     total_manhours = df["Manhours"].sum()
@@ -169,47 +115,21 @@ if file:
     TRIR = (total_recordable * 200000) / total_manhours if total_manhours else 0
     LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
-# =========================
-# KPI DISPLAY
-# =========================
-st.markdown("## 📊 Executive KPI Overview")
+    # =========================
+    # KPI DISPLAY
+    # =========================
+    st.markdown("## 📊 Executive KPI Overview")
 
-col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(3)
 
-with col1:
-    st.metric("TRIR", round(TRIR, 2))
+    with col1:
+        st.metric("TRIR", round(TRIR, 2))
 
-with col2:
-    st.metric("LTIFR", round(LTIFR, 2))
+    with col2:
+        st.metric("LTIFR", round(LTIFR, 2))
 
-with col3:
-    st.metric("Total Recordable", int(total_recordable))
-# =========================
-# CALCULATIONS (MUST COME FIRST)
-# =========================
-total_manhours = df["Manhours"].sum()
-total_lti = df["LWDC"].sum()
-total_recordable = df["LWDC"].sum() + df["MTC"].sum() + df["FAC"].sum()
-
-TRIR = (total_recordable * 200000) / total_manhours if total_manhours else 0
-LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
-
-
-# =========================
-# KPI DISPLAY
-# =========================
-st.markdown("## 📊 Executive KPI Overview")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("TRIR", round(TRIR, 2))
-
-with col2:
-    st.metric("LTIFR", round(LTIFR, 2))
-
-with col3:
-    st.metric("Total Recordable", int(total_recordable))
+    with col3:
+        st.metric("Total Recordable", int(total_recordable))
 
     # =========================
     # TREND
@@ -221,27 +141,13 @@ with col3:
 
     st.plotly_chart(px.line(trend, x="Month", y="LWDC", title="LTI Trend"), use_container_width=True)
 
-    st.markdown("## 🤖 Executive Insights")
-
-worst_month = trend.loc[trend["LWDC"].idxmax(), "Month"]
-
-st.write(f"🔴 Highest incident month: **{worst_month}**")
-
-if TRIR < 1:
-    st.write("🟢 Overall performance is **Excellent**")
-elif TRIR < 3:
-    st.write("🟡 Performance is **Acceptable but needs monitoring**")
-else:
-    st.write("🔴 Immediate action required")
-
     # =========================
-    # REPORTING
+    # PDF + EMAIL
     # =========================
     st.subheader("📄 Reporting")
 
     if st.button("Generate PDF"):
 
-        # LTI
         plt.figure(figsize=(8,4))
         plt.plot(trend["Month"], trend["LWDC"], marker='o')
         plt.xticks(rotation=45)
@@ -249,7 +155,6 @@ else:
         plt.savefig("lti_chart.png", bbox_inches="tight")
         plt.close()
 
-        # TRIR
         plt.figure(figsize=(8,4))
         plt.plot(trend["Month"], trend["TRIR"], marker='o')
         plt.xticks(rotation=45)
@@ -257,22 +162,12 @@ else:
         plt.savefig("trir_chart.png", bbox_inches="tight")
         plt.close()
 
-        # Manhours
         plt.figure(figsize=(8,4))
         plt.plot(trend["Month"], trend["Manhours"], marker='o')
         plt.xticks(rotation=45)
         plt.grid()
         plt.savefig("manhours_chart.png", bbox_inches="tight")
         plt.close()
-
-        # Near Miss
-        if "Near Miss Reports" in trend.columns:
-            plt.figure(figsize=(8,4))
-            plt.plot(trend["Month"], trend["Near Miss Reports"], marker='o')
-            plt.xticks(rotation=45)
-            plt.grid()
-            plt.savefig("nearmiss_chart.png", bbox_inches="tight")
-            plt.close()
 
         pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
         st.session_state["pdf"] = pdf
