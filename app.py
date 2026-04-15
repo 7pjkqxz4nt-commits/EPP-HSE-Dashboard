@@ -169,21 +169,15 @@ if file:
     TRIR = (total_recordable * 200000) / total_manhours if total_manhours else 0
     LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
-    # =========================
-    # KPI DISPLAY
-    # =========================
-   st.markdown("## 📊 Executive KPI Overview")
+# =========================
+# KPI DISPLAY
+# =========================
+st.markdown("## 📊 Executive KPI Overview")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric("TRIR", round(TRIR, 2))
-    if TRIR < 1:
-        st.success("Excellent Performance")
-    elif TRIR < 3:
-        st.warning("Moderate Risk")
-    else:
-        st.error("High Risk")
 
 with col2:
     st.metric("LTIFR", round(LTIFR, 2))
