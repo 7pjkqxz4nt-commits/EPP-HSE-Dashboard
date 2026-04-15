@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-st.title("🦺 HSE Annual KPI Dashboard")
+st.title("🦺 HSE Executive KPI Dashboard")
 
 # =========================
 # Upload File
@@ -13,26 +13,13 @@ uploaded_file = st.file_uploader("Upload HSE KPI File", type=["xlsx"])
 if uploaded_file:
 
     # =========================
-    # READ FILE SAFELY
+    # READ FILE
     # =========================
-    try:
-        df = pd.read_excel(uploaded_file, header=2)  # adjust if needed
-    except:
-        df = pd.read_excel(uploaded_file)
-
-    # Clean column names
+    df = pd.read_excel(uploaded_file, header=2)
     df.columns = df.columns.astype(str).str.strip()
 
-    st.subheader("📋 Data Preview")
-    st.dataframe(df.head())
-
     # =========================
-    # DEBUG: SHOW COLUMNS
-    # =========================
-    st.write("Detected Columns:", list(df.columns))
-
-    # =========================
-    # DETECT IMPORTANT COLUMNS
+    # COLUMN DETECTION
     # =========================
     def find_col(keywords):
         for col in df.columns:
@@ -47,20 +34,16 @@ if uploaded_file:
     incident_col = find_col(["incident", "case"])
 
     # =========================
-    # CLEAN DATA SAFELY
+    # CLEAN DATA
     # =========================
     if date_col:
         df = df[df[date_col].notna()]
         df = df[df[date_col] != "Annual Planned"]
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-    else:
-        st.warning("⚠️ No Date column detected")
 
     # =========================
-    # KPI CALCULATIONS
+    # KPI CALCULATION
     # =========================
-    st.subheader("📊 HSE KPIs")
-
     total_manhours = df[manhours_col].sum() if manhours_col else 0
     total_incidents = df[incident_col].sum() if incident_col else len(df)
     total_lti = df[lti_col].sum() if lti_col else 0
@@ -68,23 +51,48 @@ if uploaded_file:
     TRIR = (total_incidents * 200000) / total_manhours if total_manhours else 0
     LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
-    col1, col2, col3, col4 = st.columns(4)
+    # =========================
+    # KPI TARGET INPUT
+    # =========================
+    st.sidebar.header("🎯 KPI Targets")
 
-    col1.metric("Total Manhours", int(total_manhours))
-    col2.metric("Total Incidents", int(total_incidents))
-    col3.metric("LTI", int(total_lti))
-    col4.metric("TRIR", round(TRIR, 2))
+    target_trir = st.sidebar.number_input("TRIR Target", value=1.0)
+    target_ltifr = st.sidebar.number_input("LTIFR Target", value=0.5)
+    target_incidents = st.sidebar.number_input("Incident Target", value=10)
 
-    st.metric("LTIFR", round(LTIFR, 2))
+    # =========================
+    # TRAFFIC LIGHT FUNCTION
+    # =========================
+    def get_status(actual, target):
+        if actual <= target:
+            return "🟢 Good"
+        elif actual <= target * 1.2:
+            return "🟡 Warning"
+        else:
+            return "🔴 Critical"
+
+    trir_status = get_status(TRIR, target_trir)
+    ltifr_status = get_status(LTIFR, target_ltifr)
+    incident_status = get_status(total_incidents, target_incidents)
+
+    # =========================
+    # KPI DISPLAY
+    # =========================
+    st.subheader("📊 KPI Performance")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("TRIR", round(TRIR, 2), trir_status)
+    col2.metric("LTIFR", round(LTIFR, 2), ltifr_status)
+    col3.metric("Incidents", int(total_incidents), incident_status)
 
     # =========================
     # TREND ANALYSIS
     # =========================
-    st.subheader("📈 Trends")
+    st.subheader("📈 KPI Trends")
 
     if date_col:
         df["Month"] = df[date_col].dt.to_period("M").astype(str)
-
         trend = df.groupby("Month").sum(numeric_only=True).reset_index()
 
         if incident_col:
@@ -95,57 +103,31 @@ if uploaded_file:
             fig2 = px.line(trend, x="Month", y=manhours_col, title="Manhours Trend")
             st.plotly_chart(fig2, use_container_width=True)
 
-        # =========================
-        # ROLLING AVERAGE
-        # =========================
-        if incident_col:
-            trend["Rolling Avg"] = trend[incident_col].rolling(3).mean()
-
-            fig3 = px.line(
-                trend,
-                x="Month",
-                y="Rolling Avg",
-                title="3-Month Rolling Average"
-            )
-            st.plotly_chart(fig3, use_container_width=True)
-
     # =========================
-    # KPI COMPARISON
+    # KPI VS TARGET CHART
     # =========================
-    st.subheader("📊 KPI Comparison")
+    st.subheader("📊 KPI vs Target")
 
-    numeric_cols = df.select_dtypes(include="number").columns
+    kpi_df = pd.DataFrame({
+        "KPI": ["TRIR", "LTIFR", "Incidents"],
+        "Actual": [TRIR, LTIFR, total_incidents],
+        "Target": [target_trir, target_ltifr, target_incidents]
+    })
 
-    if len(numeric_cols) > 0 and date_col:
-        selected_kpi = st.selectbox("Select KPI", numeric_cols)
+    fig3 = px.bar(kpi_df, x="KPI", y=["Actual", "Target"], barmode="group",
+                  title="KPI vs Target Comparison")
 
-        fig4 = px.bar(df, x=date_col, y=selected_kpi, title=f"{selected_kpi} Over Time")
-        st.plotly_chart(fig4, use_container_width=True)
-
-    # =========================
-    # YEARLY ANALYSIS
-    # =========================
-    if date_col:
-        st.subheader("📅 Yearly Analysis")
-
-        df["Year"] = df[date_col].dt.year
-        yearly = df.groupby("Year").sum(numeric_only=True).reset_index()
-
-        if manhours_col:
-            fig5 = px.bar(yearly, x="Year", y=manhours_col, title="Yearly Manhours")
-            st.plotly_chart(fig5, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True)
 
     # =========================
     # INSIGHTS
     # =========================
-    st.subheader("🤖 Insights")
+    st.subheader("🤖 Executive Insights")
 
-    if date_col and incident_col:
+    st.write(f"TRIR Status: {trir_status}")
+    st.write(f"LTIFR Status: {ltifr_status}")
+    st.write(f"Incident Status: {incident_status}")
+
+    if incident_col:
         worst_month = trend.loc[trend[incident_col].idxmax(), "Month"]
-        st.write(f"🚨 Highest incidents in: **{worst_month}**")
-
-    if date_col and manhours_col:
-        best_month = trend.loc[trend[manhours_col].idxmax(), "Month"]
-        st.write(f"🏆 Highest manhours in: **{best_month}**")
-
-    st.write(f"Total records analyzed: {len(df)}")
+        st.write(f"🚨 Highest incident month: **{worst_month}**")
