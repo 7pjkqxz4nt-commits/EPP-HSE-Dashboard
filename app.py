@@ -114,21 +114,132 @@ if file:
     # =========================
     # PDF REPORT
     # =========================
-    def create_pdf():
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer)
-        styles = getSampleStyleSheet()
+   def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
 
-        content = []
-        content.append(Paragraph("HSE KPI Report", styles['Title']))
-        content.append(Spacer(1, 10))
-        content.append(Paragraph(f"TRIR: {round(TRIR,2)}", styles['Normal']))
-        content.append(Paragraph(f"LTIFR: {round(LTIFR,2)}", styles['Normal']))
-        content.append(Paragraph(f"Total Recordable: {int(total_recordable)}", styles['Normal']))
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet
+    from io import BytesIO
 
-        doc.build(content)
-        buffer.seek(0)
-        return buffer
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+
+    content = []
+
+    # =========================
+    # TITLE
+    # =========================
+    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
+    content.append(Spacer(1, 15))
+
+    # =========================
+    # KPI SUMMARY
+    # =========================
+    content.append(Paragraph("1. KPI Summary", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    kpi_data = [
+        ["Metric", "Value"],
+        ["TRIR", round(TRIR, 2)],
+        ["LTIFR", round(LTIFR, 2)],
+        ["Total Recordable Cases", int(total_recordable)]
+    ]
+
+    table = Table(kpi_data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR',(0,0),(-1,0),colors.white),
+        ('GRID', (0,0), (-1,-1), 1, colors.black)
+    ]))
+
+    content.append(table)
+    content.append(Spacer(1, 15))
+
+    # =========================
+    # INCIDENT BREAKDOWN
+    # =========================
+    content.append(Paragraph("2. Incident Breakdown", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    lti = df["LWDC"].sum()
+    mtc = df["MTC"].sum()
+    fac = df["FAC"].sum()
+
+    content.append(Paragraph(f"LTI Cases: {lti}", styles['Normal']))
+    content.append(Paragraph(f"Medical Cases: {mtc}", styles['Normal']))
+    content.append(Paragraph(f"First Aid Cases: {fac}", styles['Normal']))
+
+    content.append(Spacer(1, 15))
+
+    # =========================
+    # TREND SUMMARY
+    # =========================
+    content.append(Paragraph("3. Monthly Trend Summary", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    last_3 = trend.tail(3)
+
+    for _, row in last_3.iterrows():
+        content.append(Paragraph(
+            f"{row['Month']}: LTI={int(row['LWDC'])}, TRIR={round(row['TRIR'],2)}",
+            styles['Normal']
+        ))
+
+    content.append(Spacer(1, 15))
+
+    # =========================
+    # LEADING INDICATORS
+    # =========================
+    content.append(Paragraph("4. Leading Indicators", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    if "Near Miss Reports" in df.columns:
+        content.append(Paragraph(
+            f"Total Near Miss Reports: {int(df['Near Miss Reports'].sum())}",
+            styles['Normal']
+        ))
+
+    if "Number of risk assessment" in df.columns:
+        content.append(Paragraph(
+            f"Total Risk Assessments: {int(df['Number of risk assessment'].sum())}",
+            styles['Normal']
+        ))
+
+    content.append(Spacer(1, 15))
+
+    # =========================
+    # EXECUTIVE INSIGHT
+    # =========================
+    content.append(Paragraph("5. Executive Insight", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    worst_month = trend.loc[trend["LWDC"].idxmax(), "Month"]
+
+    content.append(Paragraph(
+        f"Highest incident month: {worst_month}",
+        styles['Normal']
+    ))
+
+    if TRIR < 1:
+        performance = "Excellent"
+    elif TRIR < 3:
+        performance = "Good"
+    else:
+        performance = "Needs Improvement"
+
+    content.append(Paragraph(
+        f"Overall Safety Performance: {performance}",
+        styles['Normal']
+    ))
+
+    # =========================
+    # BUILD PDF
+    # =========================
+    doc.build(content)
+    buffer.seek(0)
+
+    return buffer
 
     # =========================
     # DOWNLOAD + EMAIL
@@ -142,6 +253,6 @@ if file:
     email_to = st.text_input("📧 Enter email")
 
     if st.button("Send Email"):
-        pdf = create_pdf()
+        pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
         send_email(pdf, email_to)
         st.success("✅ Email sent!")
