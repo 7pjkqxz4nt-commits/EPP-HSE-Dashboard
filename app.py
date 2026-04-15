@@ -177,6 +177,8 @@ st.markdown("## 📊 Executive KPI Overview")
 col1, col2, col3 = st.columns(3)
 
 with col1:
+    with col1:
+    st.metric("TRIR", round(TRIR, 2))
 # =========================
 # KPI CALCULATION (OUTSIDE)
 # =========================
