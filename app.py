@@ -3,76 +3,137 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-st.title("🦺 HSE KPI Dashboard (Professional Version)")
+st.title("🦺 HSE Enterprise Dashboard")
 
-uploaded_file = st.file_uploader("Upload Clean HSE File", type=["xlsx"])
+# =========================
+# Upload File
+# =========================
+uploaded_file = st.file_uploader("Upload HSE Professional File", type=["xlsx"])
 
 if uploaded_file:
 
-    df = pd.read_excel(uploaded_file)
+    # =========================
+    # READ SHEETS
+    # =========================
+    lagging = pd.read_excel(uploaded_file, sheet_name="Lagging_KPI")
+    leading = pd.read_excel(uploaded_file, sheet_name="Leading_KPI")
 
     # =========================
     # CLEAN DATA
     # =========================
-    df.columns = df.columns.str.strip()
-
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-
-    df["Manhours"] = pd.to_numeric(df["Manhours"], errors="coerce")
-    df["Incidents"] = pd.to_numeric(df["Incidents"], errors="coerce")
-    df["LTI"] = pd.to_numeric(df["LTI"], errors="coerce")
-
-    df = df.fillna(0)
-
-    df["Month_Year"] = df["Date"].dt.to_period("M").astype(str)
+    for df in [lagging, leading]:
+        df.columns = df.columns.str.strip()
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df.fillna(0, inplace=True)
 
     # =========================
-    # KPI
+    # KPI CALCULATIONS
     # =========================
-    total_manhours = df["Manhours"].sum()
-    total_incidents = df["Incidents"].sum()
-    total_lti = df["LTI"].sum()
+    total_manhours = lagging["Manhours"].sum()
+    total_lti = lagging["LTI"].sum()
+    total_recordable = lagging[["LTI", "MTC", "FAC"]].sum().sum()
 
-    TRIR = (total_incidents * 1000000) / total_manhours
-    LTIFR = (total_lti * 1000000) / total_manhours
+    TRIR = (total_recordable * 200000) / total_manhours if total_manhours else 0
+    LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
-    st.subheader("📊 KPIs")
+    # =========================
+    # KPI DISPLAY
+    # =========================
+    st.subheader("📊 Lagging KPIs")
 
     c1, c2, c3 = st.columns(3)
     c1.metric("TRIR", round(TRIR, 2))
     c2.metric("LTIFR", round(LTIFR, 2))
-    c3.metric("Incidents", int(total_incidents))
+    c3.metric("Total Recordable Cases", int(total_recordable))
 
     # =========================
-    # TREND
+    # TREND ANALYSIS
     # =========================
-    trend = df.groupby("Month_Year").sum().reset_index()
+    lagging["Month"] = lagging["Date"].dt.to_period("M").astype(str)
+    trend = lagging.groupby("Month").sum(numeric_only=True).reset_index()
 
-    st.subheader("📈 Trends")
+    st.subheader("📈 Lagging Trends")
 
-    st.plotly_chart(px.line(trend, x="Month_Year", y="Incidents", title="Incident Trend"))
-    st.plotly_chart(px.line(trend, x="Month_Year", y="Manhours", title="Manhours Trend"))
+    st.plotly_chart(
+        px.line(trend, x="Month", y="LTI", title="LTI Trend"),
+        use_container_width=True
+    )
+
+    st.plotly_chart(
+        px.line(trend, x="Month", y="Manhours", title="Manhours Trend"),
+        use_container_width=True
+    )
 
     # TRIR Trend
-    trend["TRIR"] = (trend["Incidents"] * 1000000) / trend["Manhours"]
+    trend["TRIR"] = (trend["LTI"] * 200000) / trend["Manhours"]
 
-    st.plotly_chart(px.line(trend, x="Month_Year", y="TRIR", title="TRIR Trend"))
+    st.plotly_chart(
+        px.line(trend, x="Month", y="TRIR", title="TRIR Trend"),
+        use_container_width=True
+    )
+
+    # =========================
+    # LEADING INDICATORS
+    # =========================
+    leading["Month"] = leading["Date"].dt.to_period("M").astype(str)
+    lead_trend = leading.groupby("Month").sum(numeric_only=True).reset_index()
+
+    st.subheader("📊 Leading Indicators")
+
+    st.plotly_chart(
+        px.line(
+            lead_trend,
+            x="Month",
+            y=["Trainings", "Inspections", "Audits"],
+            title="Leading Indicators Trend"
+        ),
+        use_container_width=True
+    )
+
+    # =========================
+    # CORRELATION (IMPORTANT)
+    # =========================
+    st.subheader("📊 Safety Performance Relationship")
+
+    merged = pd.merge(trend, lead_trend, on="Month", how="inner")
+
+    st.plotly_chart(
+        px.scatter(
+            merged,
+            x="Trainings",
+            y="LTI",
+            trendline="ols",
+            title="Training vs Incidents"
+        ),
+        use_container_width=True
+    )
 
     # =========================
     # HEATMAP
     # =========================
-    df["Year"] = df["Date"].dt.year
-    df["Month"] = df["Date"].dt.month_name()
+    lagging["Year"] = lagging["Date"].dt.year
+    lagging["Month_Name"] = lagging["Date"].dt.month_name()
 
-    heatmap = df.pivot_table(values="Incidents", index="Year", columns="Month")
+    heatmap = lagging.pivot_table(
+        values="LTI",
+        index="Year",
+        columns="Month_Name",
+        aggfunc="sum"
+    )
 
-    st.subheader("🔥 Heatmap")
-    st.plotly_chart(px.imshow(heatmap, text_auto=True))
+    st.subheader("🔥 Risk Heatmap")
+
+    st.plotly_chart(
+        px.imshow(heatmap, text_auto=True),
+        use_container_width=True
+    )
 
     # =========================
     # INSIGHTS
     # =========================
-    st.subheader("🤖 Insights")
+    st.subheader("🤖 Executive Insights")
 
-    worst = trend.loc[trend["Incidents"].idxmax(), "Month_Year"]
-    st.write(f"🚨 Highest incident month: {worst}")
+    worst = trend.loc[trend["LTI"].idxmax(), "Month"]
+    st.write(f"🚨 Highest risk month: **{worst}**")
+
+    st.write("✔ Increasing leading indicators should reduce incidents over time")
