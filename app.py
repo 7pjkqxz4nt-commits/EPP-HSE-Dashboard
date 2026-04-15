@@ -15,8 +15,8 @@ st.title("🦺 HSE Professional Dashboard")
 # =========================
 def send_email(pdf_buffer, receiver_email):
 
-    sender_email = st.secrets["amirsalem@live.com"]
-    app_password = st.secrets["vbdzjotfcmmornoy"]
+    sender_email = st.secrets["EMAIL"]
+app_password = st.secrets["APP_PASSWORD"]
 
     msg = EmailMessage()
     msg['Subject'] = "HSE KPI Report"
