@@ -327,36 +327,34 @@ def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
     # =========================
 st.subheader("📄 Reporting")
 
-# Generate PDF
 if st.button("Generate PDF"):
-    fig = px.line(trend, x="Month", y="LWDC", title="LTI Trend")
 
-    import plotly.io as pio
-    plt.figure()
-plt.plot(trend["Month"], trend["LWDC"])
-plt.title("LTI Trend")
-plt.xticks(rotation=45)
+    # Create chart
+    import matplotlib.pyplot as plt
 
-plt.savefig("lti_chart.png", bbox_inches="tight")
-plt.close()
+    plt.figure(figsize=(8,4))
+    plt.plot(trend["Month"], trend["LWDC"], marker='o')
+    plt.title("LTI Trend")
+    plt.xticks(rotation=45)
+    plt.grid()
 
+    plt.savefig("lti_chart.png", bbox_inches="tight")
+    plt.close()
+
+    # Create PDF
     pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
-    st.session_state["pdf"] = pdf
 
+    st.session_state["pdf"] = pdf
     st.success("PDF generated!")
 
-# Download
 if "pdf" in st.session_state:
     st.download_button("Download PDF", st.session_state["pdf"], "HSE_Report.pdf")
 
-# Email
-st.subheader("📧 Send Report")
-
-email_to = st.text_input("Enter Email Address")
+email_to = st.text_input("Enter Email")
 
 if st.button("Send Email"):
     if "pdf" not in st.session_state:
-        st.error("⚠️ Please generate PDF first")
+        st.error("Generate PDF first")
     else:
         send_email(st.session_state["pdf"], email_to)
-        st.success("✅ Email sent successfully!")
+        st.success("Email sent!")
