@@ -292,15 +292,26 @@ def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
     # =========================
     # DOWNLOAD + EMAIL
     # =========================
-    st.subheader("📄 Reporting")
+   st.subheader("📄 Reporting")
 
-    if st.button("Generate PDF"):
-        pdf = create_pdf()
-        st.download_button("Download PDF", pdf, "HSE_Report.pdf")
+# Generate PDF button
+if st.button("Generate PDF"):
+    pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
+    st.session_state["pdf"] = pdf
+    st.success("PDF generated!")
 
-    email_to = st.text_input("📧 Enter email")
+# Download button (only appears after generation)
+if "pdf" in st.session_state:
+    st.download_button("Download PDF", st.session_state["pdf"], "HSE_Report.pdf")
 
-    if st.button("Send Email"):
-        pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
-        send_email(pdf, email_to)
-        st.success("✅ Email sent!")
+# Email section
+st.subheader("📧 Send Report")
+
+email_to = st.text_input("Enter Email Address")
+
+if st.button("Send Email"):
+    if "pdf" not in st.session_state:
+        st.error("⚠️ Please generate PDF first")
+    else:
+        send_email(st.session_state["pdf"], email_to)
+        st.success("✅ Email sent successfully!")
