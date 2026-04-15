@@ -185,7 +185,7 @@ with col2:
 with col3:
     st.metric("Total Recordable", int(total_recordable))
 # =========================
-# KPI CALCULATION (OUTSIDE)
+# CALCULATIONS (MUST COME FIRST)
 # =========================
 total_manhours = df["Manhours"].sum()
 total_lti = df["LWDC"].sum()
