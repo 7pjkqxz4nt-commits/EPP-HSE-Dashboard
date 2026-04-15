@@ -177,8 +177,8 @@ st.markdown("## 📊 Executive KPI Overview")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-   # =========================
-# KPI CALCULATION
+# =========================
+# KPI CALCULATION (OUTSIDE)
 # =========================
 total_manhours = df["Manhours"].sum()
 total_lti = df["LWDC"].sum()
@@ -189,7 +189,7 @@ LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
 
 # =========================
-# KPI DISPLAY (AFTER CALCULATION)
+# KPI DISPLAY
 # =========================
 st.markdown("## 📊 Executive KPI Overview")
 
