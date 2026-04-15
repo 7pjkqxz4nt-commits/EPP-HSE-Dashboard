@@ -332,17 +332,78 @@ if st.button("Generate PDF"):
     # Create chart
     import matplotlib.pyplot as plt
 
+# =========================
+# LTI Chart
+# =========================
+plt.figure(figsize=(8,4))
+plt.plot(trend["Month"], trend["LWDC"], marker='o')
+plt.title("LTI Trend")
+plt.xticks(rotation=45)
+plt.grid()
+plt.savefig("lti_chart.png", bbox_inches="tight")
+plt.close()
+
+# =========================
+# TRIR Chart
+# =========================
+plt.figure(figsize=(8,4))
+plt.plot(trend["Month"], trend["TRIR"], marker='o', color='green')
+plt.title("TRIR Trend")
+plt.xticks(rotation=45)
+plt.grid()
+plt.savefig("trir_chart.png", bbox_inches="tight")
+plt.close()
+
+# =========================
+# Manhours Chart
+# =========================
+plt.figure(figsize=(8,4))
+plt.plot(trend["Month"], trend["Manhours"], marker='o', color='orange')
+plt.title("Manhours Trend")
+plt.xticks(rotation=45)
+plt.grid()
+plt.savefig("manhours_chart.png", bbox_inches="tight")
+plt.close()
+
+# =========================
+# Near Miss Chart (if exists)
+# =========================
+if "Near Miss Reports" in trend.columns:
     plt.figure(figsize=(8,4))
-    plt.plot(trend["Month"], trend["LWDC"], marker='o')
-    plt.title("LTI Trend")
+    plt.plot(trend["Month"], trend["Near Miss Reports"], marker='o', color='red')
+    plt.title("Near Miss Trend")
     plt.xticks(rotation=45)
     plt.grid()
+    plt.savefig("nearmiss_chart.png", bbox_inches="tight")
+    plt.close()
 
     plt.savefig("lti_chart.png", bbox_inches="tight")
     plt.close()
 
     # Create PDF
-    pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
+    from reportlab.platypus import Image, Spacer
+
+content.append(Spacer(1, 20))
+content.append(Paragraph("Charts Overview", styles['Heading2']))
+content.append(Spacer(1, 10))
+
+# LTI
+content.append(Image("lti_chart.png", width=400, height=200))
+content.append(Spacer(1, 10))
+
+# TRIR
+content.append(Image("trir_chart.png", width=400, height=200))
+content.append(Spacer(1, 10))
+
+# Manhours
+content.append(Image("manhours_chart.png", width=400, height=200))
+content.append(Spacer(1, 10))
+
+# Near Miss (optional)
+try:
+    content.append(Image("nearmiss_chart.png", width=400, height=200))
+except:
+    pass
 
     st.session_state["pdf"] = pdf
     st.success("PDF generated!")
