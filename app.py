@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import matplotlib.pyplot as plt
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 import smtplib
 from email.message import EmailMessage
 
@@ -14,7 +16,6 @@ st.title("🦺 HSE Professional Dashboard")
 # EMAIL FUNCTION
 # =========================
 def send_email(pdf_buffer, receiver_email):
-
     sender_email = st.secrets["EMAIL"]
     app_password = st.secrets["APP_PASSWORD"]
 
@@ -22,11 +23,10 @@ def send_email(pdf_buffer, receiver_email):
     msg['Subject'] = "HSE KPI Report"
     msg['From'] = sender_email
     msg['To'] = receiver_email
-
     msg.set_content("Attached is the latest HSE KPI report.")
 
     msg.add_attachment(
-        pdf_buffer.read(),
+        pdf_buffer.getvalue(),
         maintype='application',
         subtype='pdf',
         filename='HSE_Report.pdf'
@@ -37,19 +37,60 @@ def send_email(pdf_buffer, receiver_email):
         smtp.send_message(msg)
 
 # =========================
-# UPLOAD FILE
+# PDF FUNCTION
+# =========================
+def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+    content = []
+
+    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
+    content.append(Spacer(1, 15))
+
+    # KPI Table
+    kpi_data = [
+        ["Metric", "Value"],
+        ["TRIR", round(TRIR, 2)],
+        ["LTIFR", round(LTIFR, 2)],
+        ["Total Recordable", int(total_recordable)]
+    ]
+
+    table = Table(kpi_data)
+    table.setStyle([
+        ('GRID', (0,0), (-1,-1), 1, colors.black)
+    ])
+    content.append(table)
+    content.append(Spacer(1, 15))
+
+    # Charts
+    content.append(Paragraph("Charts Overview", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    charts = ["lti_chart.png", "trir_chart.png", "manhours_chart.png", "nearmiss_chart.png"]
+
+    for chart in charts:
+        try:
+            content.append(Image(chart, width=400, height=200))
+            content.append(Spacer(1, 10))
+        except:
+            pass
+
+    doc.build(content)
+    buffer.seek(0)
+    return buffer
+
+# =========================
+# FILE UPLOAD
 # =========================
 file = st.file_uploader("Upload HSE KPI File", type=["xlsx"])
 
 if file:
-
     df = pd.read_excel(file)
     df.columns = df.columns.str.strip()
 
-    # =========================
-    # CLEAN DATA
-    # =========================
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
 
     numeric_cols = [
         "EPP Total  Worked Man-HRs",
@@ -63,11 +104,6 @@ if file:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    df = df.dropna(subset=["Date"])
-
-    # =========================
-    # KPI CALCULATION
-    # =========================
     df["Manhours"] = df["EPP Total  Worked Man-HRs"] + df["Contractor Total  Worked Man-HRs"]
 
     total_manhours = df["Manhours"].sum()
@@ -78,10 +114,9 @@ if file:
     LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
     # =========================
-    # KPIs DISPLAY
+    # KPI DISPLAY
     # =========================
     st.subheader("📊 KPIs")
-
     c1, c2, c3 = st.columns(3)
     c1.metric("TRIR", round(TRIR, 2))
     c2.metric("LTIFR", round(LTIFR, 2))
@@ -95,326 +130,60 @@ if file:
 
     trend["TRIR"] = (trend["LWDC"] + trend["MTC"] + trend["FAC"]) * 200000 / trend["Manhours"]
 
-    st.subheader("📈 Trends")
-
     st.plotly_chart(px.line(trend, x="Month", y="LWDC", title="LTI Trend"), use_container_width=True)
-    st.plotly_chart(px.line(trend, x="Month", y="TRIR", title="TRIR Trend"), use_container_width=True)
 
     # =========================
-    # LEADING INDICATORS
+    # REPORTING
     # =========================
-    st.subheader("📊 Leading Indicators")
-
-    if "Near Miss Reports" in trend.columns:
-        st.plotly_chart(px.line(trend, x="Month", y="Near Miss Reports", title="Near Miss Trend"), use_container_width=True)
-
-    if "Number of risk assessment" in trend.columns:
-        st.plotly_chart(px.line(trend, x="Month", y="Number of risk assessment", title="Risk Assessment Trend"), use_container_width=True)
-
-    # =========================
-    # PDF REPORT
-    # =========================
-def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
-
-    from reportlab.platypus import Image
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet
-    from io import BytesIO
-
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer)
-    styles = getSampleStyleSheet()
-
-    content = []
-
-    # Title
-    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
-    content.append(Spacer(1, 15))
-
-    # KPI Summary
-    content.append(Paragraph("KPI Summary", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    kpi_data = [
-        ["Metric", "Value"],
-        ["TRIR", round(TRIR, 2)],
-        ["LTIFR", round(LTIFR, 2)],
-        ["Total Recordable", int(total_recordable)]
-    ]
-
-    table = Table(kpi_data)
-    table.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 1, colors.black)
-    ]))
-
-    content.append(table)
-    content.append(Spacer(1, 15))
-
-    # Incident Summary
-    lti = df["LWDC"].sum()
-    mtc = df["MTC"].sum()
-    fac = df["FAC"].sum()
-
-    content.append(Paragraph(f"LTI: {lti}", styles['Normal']))
-    content.append(Paragraph(f"MTC: {mtc}", styles['Normal']))
-    content.append(Paragraph(f"FAC: {fac}", styles['Normal']))
-
-    content.append(Spacer(1, 15))
-
-    # Trend Summary
-    content.append(Paragraph("Recent Trend", styles['Heading2']))
-
-    for _, row in trend.tail(3).iterrows():
-        content.append(Paragraph(
-            f"{row['Month']} → LTI: {int(row['LWDC'])}",
-            styles['Normal']
-        ))
-
-   # =========================
-# ADD CHART TO PDF
-# =========================
-def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
-
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
-    from reportlab.lib.styles import getSampleStyleSheet
-    from io import BytesIO
-
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer)
-    styles = getSampleStyleSheet()
-
-    content = []
-
-    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
-    content.append(Spacer(1, 10))
-
-    content.append(Paragraph(f"TRIR: {round(TRIR,2)}", styles['Normal']))
-    content.append(Paragraph(f"LTIFR: {round(LTIFR,2)}", styles['Normal']))
-
-    # IMPORTANT → chart
-    try:
-        from reportlab.platypus import Image
-        img = Image("lti_chart.png", width=400, height=200)
-        content.append(img)
-    except:
-        content.append(Paragraph("Chart not available", styles['Normal']))
-
-    doc.build(content)
-
-    buffer.seek(0)
-
-    return buffer
-
-    # =========================
-    # TITLE
-    # =========================
-    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
-    content.append(Spacer(1, 15))
-
-    # =========================
-    # KPI SUMMARY
-    # =========================
-    content.append(Paragraph("1. KPI Summary", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    kpi_data = [
-        ["Metric", "Value"],
-        ["TRIR", round(TRIR, 2)],
-        ["LTIFR", round(LTIFR, 2)],
-        ["Total Recordable Cases", int(total_recordable)]
-    ]
-
-    table = Table(kpi_data)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.grey),
-        ('TEXTCOLOR',(0,0),(-1,0),colors.white),
-        ('GRID', (0,0), (-1,-1), 1, colors.black)
-    ]))
-
-    content.append(table)
-    content.append(Spacer(1, 15))
-
-    # =========================
-    # INCIDENT BREAKDOWN
-    # =========================
-    content.append(Paragraph("2. Incident Breakdown", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    lti = df["LWDC"].sum()
-    mtc = df["MTC"].sum()
-    fac = df["FAC"].sum()
-
-    content.append(Paragraph(f"LTI Cases: {lti}", styles['Normal']))
-    content.append(Paragraph(f"Medical Cases: {mtc}", styles['Normal']))
-    content.append(Paragraph(f"First Aid Cases: {fac}", styles['Normal']))
-
-    content.append(Spacer(1, 15))
-
-    # =========================
-    # TREND SUMMARY
-    # =========================
-    content.append(Paragraph("3. Monthly Trend Summary", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    last_3 = trend.tail(3)
-
-    for _, row in last_3.iterrows():
-        content.append(Paragraph(
-            f"{row['Month']}: LTI={int(row['LWDC'])}, TRIR={round(row['TRIR'],2)}",
-            styles['Normal']
-        ))
-
-    content.append(Spacer(1, 15))
-
-    # =========================
-    # LEADING INDICATORS
-    # =========================
-    content.append(Paragraph("4. Leading Indicators", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    if "Near Miss Reports" in df.columns:
-        content.append(Paragraph(
-            f"Total Near Miss Reports: {int(df['Near Miss Reports'].sum())}",
-            styles['Normal']
-        ))
-
-    if "Number of risk assessment" in df.columns:
-        content.append(Paragraph(
-            f"Total Risk Assessments: {int(df['Number of risk assessment'].sum())}",
-            styles['Normal']
-        ))
-
-    content.append(Spacer(1, 15))
-
-    # =========================
-    # EXECUTIVE INSIGHT
-    # =========================
-    content.append(Paragraph("5. Executive Insight", styles['Heading2']))
-    content.append(Spacer(1, 10))
-
-    worst_month = trend.loc[trend["LWDC"].idxmax(), "Month"]
-
-    content.append(Paragraph(
-        f"Highest incident month: {worst_month}",
-        styles['Normal']
-    ))
-
-    if TRIR < 1:
-        performance = "Excellent"
-    elif TRIR < 3:
-        performance = "Good"
-    else:
-        performance = "Needs Improvement"
-
-    content.append(Paragraph(
-        f"Overall Safety Performance: {performance}",
-        styles['Normal']
-    ))
-
-    # =========================
-    # BUILD PDF
-    # =========================
-    doc.build(content)
-    buffer.seek(0)
-
-    return buffer
-
-    # =========================
-    # DOWNLOAD + EMAIL
-    # =========================
-st.subheader("📄 Reporting")
-
-if st.button("Generate PDF"):
-
-    import matplotlib.pyplot as plt  # IMPORTANT
-
-    plt.figure(figsize=(8,4))
-
-# =========================
-# LTI Chart
-# =========================
-plt.figure(figsize=(8,4))
-plt.plot(trend["Month"], trend["LWDC"], marker='o')
-plt.title("LTI Trend")
-plt.xticks(rotation=45)
-plt.grid()
-plt.savefig("lti_chart.png", bbox_inches="tight")
-plt.close()
-
-# =========================
-# TRIR Chart
-# =========================
-plt.figure(figsize=(8,4))
-plt.plot(trend["Month"], trend["TRIR"], marker='o', color='green')
-plt.title("TRIR Trend")
-plt.xticks(rotation=45)
-plt.grid()
-plt.savefig("trir_chart.png", bbox_inches="tight")
-plt.close()
-
-# =========================
-# Manhours Chart
-# =========================
-plt.figure(figsize=(8,4))
-plt.plot(trend["Month"], trend["Manhours"], marker='o', color='orange')
-plt.title("Manhours Trend")
-plt.xticks(rotation=45)
-plt.grid()
-plt.savefig("manhours_chart.png", bbox_inches="tight")
-plt.close()
-
-# =========================
-# Near Miss Chart (if exists)
-# =========================
-if "Near Miss Reports" in trend.columns:
-    plt.figure(figsize=(8,4))
-    plt.plot(trend["Month"], trend["Near Miss Reports"], marker='o', color='red')
-    plt.title("Near Miss Trend")
-    plt.xticks(rotation=45)
-    plt.grid()
-    plt.savefig("nearmiss_chart.png", bbox_inches="tight")
-    plt.close()
-
-    plt.savefig("lti_chart.png", bbox_inches="tight")
-    plt.close()
-
-    # Create PDF
-    from reportlab.platypus import Image, Spacer
-
-content.append(Spacer(1, 20))
-content.append(Paragraph("Charts Overview", styles['Heading2']))
-content.append(Spacer(1, 10))
-
-# LTI
-content.append(Image("lti_chart.png", width=400, height=200))
-content.append(Spacer(1, 10))
-
-# TRIR
-content.append(Image("trir_chart.png", width=400, height=200))
-content.append(Spacer(1, 10))
-
-# Manhours
-content.append(Image("manhours_chart.png", width=400, height=200))
-content.append(Spacer(1, 10))
-
-# Near Miss (optional)
-try:
-    content.append(Image("nearmiss_chart.png", width=400, height=200))
-except:
-    pass
-
-    st.session_state["pdf"] = pdf
-    st.success("PDF generated!")
-
-if "pdf" in st.session_state:
-    st.download_button("Download PDF", st.session_state["pdf"], "HSE_Report.pdf")
-
-email_to = st.text_input("Enter Email")
-
-if st.button("Send Email"):
-    if "pdf" not in st.session_state:
-        st.error("Generate PDF first")
-    else:
-        send_email(st.session_state["pdf"], email_to)
-        st.success("Email sent!")
+    st.subheader("📄 Reporting")
+
+    if st.button("Generate PDF"):
+
+        # LTI
+        plt.figure(figsize=(8,4))
+        plt.plot(trend["Month"], trend["LWDC"], marker='o')
+        plt.xticks(rotation=45)
+        plt.grid()
+        plt.savefig("lti_chart.png", bbox_inches="tight")
+        plt.close()
+
+        # TRIR
+        plt.figure(figsize=(8,4))
+        plt.plot(trend["Month"], trend["TRIR"], marker='o')
+        plt.xticks(rotation=45)
+        plt.grid()
+        plt.savefig("trir_chart.png", bbox_inches="tight")
+        plt.close()
+
+        # Manhours
+        plt.figure(figsize=(8,4))
+        plt.plot(trend["Month"], trend["Manhours"], marker='o')
+        plt.xticks(rotation=45)
+        plt.grid()
+        plt.savefig("manhours_chart.png", bbox_inches="tight")
+        plt.close()
+
+        # Near Miss
+        if "Near Miss Reports" in trend.columns:
+            plt.figure(figsize=(8,4))
+            plt.plot(trend["Month"], trend["Near Miss Reports"], marker='o')
+            plt.xticks(rotation=45)
+            plt.grid()
+            plt.savefig("nearmiss_chart.png", bbox_inches="tight")
+            plt.close()
+
+        pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
+        st.session_state["pdf"] = pdf
+        st.success("PDF Generated")
+
+    if "pdf" in st.session_state:
+        st.download_button("Download PDF", st.session_state["pdf"], "HSE_Report.pdf")
+
+    email_to = st.text_input("Enter Email")
+
+    if st.button("Send Email"):
+        if "pdf" not in st.session_state:
+            st.error("Generate PDF first")
+        else:
+            send_email(st.session_state["pdf"], email_to)
+            st.success("Email sent!")
