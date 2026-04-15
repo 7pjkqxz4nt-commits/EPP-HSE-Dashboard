@@ -114,7 +114,7 @@ if file:
     # =========================
     # PDF REPORT
     # =========================
-   def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
+def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
 
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
@@ -126,6 +126,54 @@ if file:
     styles = getSampleStyleSheet()
 
     content = []
+
+    # Title
+    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
+    content.append(Spacer(1, 15))
+
+    # KPI Summary
+    content.append(Paragraph("KPI Summary", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    kpi_data = [
+        ["Metric", "Value"],
+        ["TRIR", round(TRIR, 2)],
+        ["LTIFR", round(LTIFR, 2)],
+        ["Total Recordable", int(total_recordable)]
+    ]
+
+    table = Table(kpi_data)
+    table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 1, colors.black)
+    ]))
+
+    content.append(table)
+    content.append(Spacer(1, 15))
+
+    # Incident Summary
+    lti = df["LWDC"].sum()
+    mtc = df["MTC"].sum()
+    fac = df["FAC"].sum()
+
+    content.append(Paragraph(f"LTI: {lti}", styles['Normal']))
+    content.append(Paragraph(f"MTC: {mtc}", styles['Normal']))
+    content.append(Paragraph(f"FAC: {fac}", styles['Normal']))
+
+    content.append(Spacer(1, 15))
+
+    # Trend Summary
+    content.append(Paragraph("Recent Trend", styles['Heading2']))
+
+    for _, row in trend.tail(3).iterrows():
+        content.append(Paragraph(
+            f"{row['Month']} → LTI: {int(row['LWDC'])}",
+            styles['Normal']
+        ))
+
+    doc.build(content)
+    buffer.seek(0)
+
+    return buffer
 
     # =========================
     # TITLE
