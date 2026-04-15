@@ -1,153 +1,107 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from io import BytesIO
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 
 st.set_page_config(layout="wide")
-st.title("🦺 HSE Enterprise Dashboard")
+st.title("🦺 HSE KPI Dashboard (From Your File)")
 
-uploaded_file = st.file_uploader("Upload HSE Professional File", type=["xlsx"])
+file = st.file_uploader("Upload HSE KPI File", type=["xlsx"])
 
-if uploaded_file:
+if file:
 
-    # =========================
-    # READ SHEETS
-    # =========================
-    try:
-        lagging = pd.read_excel(uploaded_file, sheet_name="Lagging_KPI")
-        leading = pd.read_excel(uploaded_file, sheet_name="Leading_KPI")
-    except:
-        st.error("❌ Ensure sheet names are: Lagging_KPI & Leading_KPI")
-        st.stop()
+    df = pd.read_excel(file)
+    df.columns = df.columns.str.strip()
 
     # =========================
-    # CLEAN DATA
+    # CLEAN
     # =========================
-    for df in [lagging, leading]:
-        df.columns = df.columns.str.strip()
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-    lagging = lagging.fillna(0)
-    leading = leading.fillna(0)
+    num_cols = [
+        "EPP Total  Worked Man-HRs",
+        "Contractor Total  Worked Man-HRs",
+        "LWDC", "MTC", "FAC",
+        "Near Miss Reports"
+    ]
 
-    # Ensure numeric columns
-    num_cols_lag = ["Manhours", "LTI", "MTC", "FAC"]
-    for col in num_cols_lag:
-        lagging[col] = pd.to_numeric(lagging[col], errors="coerce").fillna(0)
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     # =========================
-    # KPI CALCULATIONS (FIXED)
+    # KPI CALCULATION (CORRECT)
     # =========================
-    total_manhours = lagging["Manhours"].sum()
-    total_lti = lagging["LTI"].sum()
+    df["Manhours"] = df["EPP Total  Worked Man-HRs"] + df["Contractor Total  Worked Man-HRs"]
 
-    # Correct TRIR = LTI + MTC + FAC
-    total_recordable = lagging[["LTI", "MTC", "FAC"]].sum(axis=1).sum()
+    total_manhours = df["Manhours"].sum()
+    total_lti = df["LWDC"].sum()
+    total_recordable = df["LWDC"].sum() + df["MTC"].sum() + df["FAC"].sum()
 
     TRIR = (total_recordable * 200000) / total_manhours if total_manhours else 0
     LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
     # =========================
-    # TARGETS (NEW)
-    # =========================
-    st.sidebar.header("🎯 KPI Targets")
-
-    target_trir = st.sidebar.number_input("TRIR Target", value=1.0)
-    target_ltifr = st.sidebar.number_input("LTIFR Target", value=0.5)
-
-    def status(actual, target):
-        if actual <= target:
-            return "🟢 Good"
-        elif actual <= target * 1.2:
-            return "🟡 Warning"
-        else:
-            return "🔴 Critical"
-
-    # =========================
     # KPI DISPLAY
     # =========================
-    st.subheader("📊 Lagging KPIs")
+    st.subheader("📊 KPIs")
 
     c1, c2, c3 = st.columns(3)
-
-    c1.metric("TRIR", round(TRIR, 2), status(TRIR, target_trir))
-    c2.metric("LTIFR", round(LTIFR, 2), status(LTIFR, target_ltifr))
-    c3.metric("Total Recordable", int(total_recordable))
+    c1.metric("TRIR", round(TRIR, 2))
+    c2.metric("LTIFR", round(LTIFR, 2))
+    c3.metric("Total Incidents", int(total_recordable))
 
     # =========================
     # TREND
     # =========================
-    lagging["Month"] = lagging["Date"].dt.to_period("M").astype(str)
-    trend = lagging.groupby("Month").sum(numeric_only=True).reset_index()
+    df["Month"] = df["Date"].dt.to_period("M").astype(str)
 
-    st.subheader("📈 Lagging Trends")
+    trend = df.groupby("Month").sum(numeric_only=True).reset_index()
 
-    st.plotly_chart(px.line(trend, x="Month", y="LTI", title="LTI Trend"), use_container_width=True)
-    st.plotly_chart(px.line(trend, x="Month", y="Manhours", title="Manhours Trend"), use_container_width=True)
+    trend["TRIR"] = (trend["LWDC"] + trend["MTC"] + trend["FAC"]) * 200000 / trend["Manhours"]
 
-    # TRIR Trend (FIXED)
-    trend["Recordable"] = trend["LTI"] + trend["MTC"] + trend["FAC"]
-    trend["TRIR"] = (trend["Recordable"] * 200000) / trend["Manhours"]
+    st.subheader("📈 Trends")
 
+    st.plotly_chart(px.line(trend, x="Month", y="LWDC", title="LTI Trend"), use_container_width=True)
     st.plotly_chart(px.line(trend, x="Month", y="TRIR", title="TRIR Trend"), use_container_width=True)
 
     # =========================
     # LEADING INDICATORS
     # =========================
-    leading["Month"] = leading["Date"].dt.to_period("M").astype(str)
-    lead_trend = leading.groupby("Month").sum(numeric_only=True).reset_index()
-
     st.subheader("📊 Leading Indicators")
 
     st.plotly_chart(
-        px.line(
-            lead_trend,
-            x="Month",
-            y=["Trainings", "Inspections", "Audits"],
-            title="Leading Indicators Trend"
-        ),
+        px.line(trend, x="Month", y="Near Miss Reports", title="Near Miss Trend"),
         use_container_width=True
     )
-
-    # =========================
-    # CORRELATION
-    # =========================
-    st.subheader("📊 Leading vs Lagging")
-
-    merged = pd.merge(trend, lead_trend, on="Month", how="inner")
 
     st.plotly_chart(
-        px.scatter(
-            merged,
-            x="Trainings",
-            y="Recordable",
-            trendline="ols",
-            title="Training vs Recordable Cases"
-        ),
+        px.line(trend, x="Month", y="Number of risk assessment", title="Risk Assessment Trend"),
         use_container_width=True
     )
 
     # =========================
-    # HEATMAP
+    # PDF REPORT
     # =========================
-    lagging["Year"] = lagging["Date"].dt.year
-    lagging["Month_Name"] = lagging["Date"].dt.month_name()
+    def create_pdf():
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer)
+        styles = getSampleStyleSheet()
 
-    heatmap = lagging.pivot_table(
-        values="LTI",
-        index="Year",
-        columns="Month_Name",
-        aggfunc="sum"
-    )
+        content = []
+        content.append(Paragraph("HSE KPI Report", styles['Title']))
+        content.append(Spacer(1, 10))
 
-    st.subheader("🔥 Risk Heatmap")
-    st.plotly_chart(px.imshow(heatmap, text_auto=True), use_container_width=True)
+        content.append(Paragraph(f"TRIR: {round(TRIR,2)}", styles['Normal']))
+        content.append(Paragraph(f"LTIFR: {round(LTIFR,2)}", styles['Normal']))
+        content.append(Paragraph(f"Total Incidents: {int(total_recordable)}", styles['Normal']))
 
-    # =========================
-    # INSIGHTS
-    # =========================
-    st.subheader("🤖 Executive Insights")
+        doc.build(content)
+        buffer.seek(0)
+        return buffer
 
-    worst = trend.loc[trend["Recordable"].idxmax(), "Month"]
-    st.write(f"🚨 Highest risk month: **{worst}**")
-
-    st.write("✔ Increase leading indicators to reduce incidents")
+    if st.button("Generate Report"):
+        pdf = create_pdf()
+        st.download_button("Download PDF", pdf, "HSE_Report.pdf")
