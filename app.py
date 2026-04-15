@@ -292,7 +292,7 @@ def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
     # =========================
     # DOWNLOAD + EMAIL
     # =========================
-   st.subheader("📄 Reporting")
+st.subheader("📄 Reporting")
 
 # Generate PDF
 if st.button("Generate PDF"):
