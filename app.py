@@ -17,12 +17,12 @@ if uploaded_file:
     # Remove empty columns
     df = df.dropna(axis=1, how='all')
 
-    st.write("Raw Columns:", df.columns)
+    st.write("Raw Columns:", # ========================= # CLEAN COLUMNS SAFELY # ========================= df.columns = df.columns.astype(str).str.strip()  # Remove completely empty columns df = df.dropna(axis=1, how='all')  st.write("Columns after cleaning:", df.columns)  # ========================= # SELECT REQUIRED COLUMNS ONLY # ========================= df = df.iloc[:, :11]  # take first 11 columns only (based on your file)  df.columns = [     "Date",     "Month",     "Year",     "Employees",     "Total_Manhours",     "Safe_Manhours",     "Safe_Man_Days",     "Contractor_Employees",     "Contractor_Manhours",     "Total_Incidents",     "LTI" ])
 
     # =========================
     # RENAME COLUMNS MANUALLY (BASED ON YOUR FILE)
     # =========================
-    df.columns = [
+    # ========================= # CLEAN COLUMNS SAFELY # ========================= df.columns = df.columns.astype(str).str.strip()  # Remove completely empty columns df = df.dropna(axis=1, how='all')  st.write("Columns after cleaning:", df.columns)  # ========================= # SELECT REQUIRED COLUMNS ONLY # ========================= df = df.iloc[:, :11]  # take first 11 columns only (based on your file)  df.columns = [     "Date",     "Month",     "Year",     "Employees",     "Total_Manhours",     "Safe_Manhours",     "Safe_Man_Days",     "Contractor_Employees",     "Contractor_Manhours",     "Total_Incidents",     "LTI" ] = [
         "Date",
         "Month",
         "Year",
