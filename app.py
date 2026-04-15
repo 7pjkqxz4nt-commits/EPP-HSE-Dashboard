@@ -329,8 +329,9 @@ st.subheader("📄 Reporting")
 
 if st.button("Generate PDF"):
 
-    # Create chart
-    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt   ✅ IMPORTANT
+
+    plt.figure(figsize=(8,4))
 
 # =========================
 # LTI Chart
