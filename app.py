@@ -1,3 +1,5 @@
+import plotly.io as pio
+from reportlab.platypus import Image
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -296,6 +298,11 @@ st.subheader("📄 Reporting")
 
 # Generate PDF
 if st.button("Generate PDF"):
+    # Create chart
+fig = px.line(trend, x="Month", y="LWDC", title="LTI Trend")
+
+# Save chart as image
+pio.write_image(fig, "lti_chart.png", format="png")
     pdf = create_pdf(df, trend, TRIR, LTIFR, total_recordable)
     st.session_state["pdf"] = pdf
     st.success("PDF generated!")
