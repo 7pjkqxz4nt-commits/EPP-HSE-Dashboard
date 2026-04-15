@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-st.title("🦺 HSE Executive KPI Dashboard")
+st.title("🦺 HSE Enterprise KPI Dashboard")
 
 # =========================
 # Upload File
@@ -19,7 +19,7 @@ if uploaded_file:
     df.columns = df.columns.astype(str).str.strip()
 
     # =========================
-    # COLUMN DETECTION
+    # DETECT COLUMNS
     # =========================
     def find_col(keywords):
         for col in df.columns:
@@ -42,7 +42,7 @@ if uploaded_file:
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
 
     # =========================
-    # KPI CALCULATION
+    # KPI CALCULATIONS
     # =========================
     total_manhours = df[manhours_col].sum() if manhours_col else 0
     total_incidents = df[incident_col].sum() if incident_col else len(df)
@@ -52,7 +52,7 @@ if uploaded_file:
     LTIFR = (total_lti * 1000000) / total_manhours if total_manhours else 0
 
     # =========================
-    # KPI TARGET INPUT
+    # TARGET INPUT
     # =========================
     st.sidebar.header("🎯 KPI Targets")
 
@@ -61,73 +61,82 @@ if uploaded_file:
     target_incidents = st.sidebar.number_input("Incident Target", value=10)
 
     # =========================
-    # TRAFFIC LIGHT FUNCTION
+    # KPI SCORE FUNCTION
     # =========================
-    def get_status(actual, target):
-        if actual <= target:
-            return "🟢 Good"
-        elif actual <= target * 1.2:
-            return "🟡 Warning"
-        else:
-            return "🔴 Critical"
+    def kpi_score(actual, target):
+        if target == 0:
+            return 0
+        score = max(0, min(100, (target / actual) * 100 if actual > 0 else 100))
+        return round(score, 1)
 
-    trir_status = get_status(TRIR, target_trir)
-    ltifr_status = get_status(LTIFR, target_ltifr)
-    incident_status = get_status(total_incidents, target_incidents)
+    score_trir = kpi_score(TRIR, target_trir)
+    score_ltifr = kpi_score(LTIFR, target_ltifr)
+    score_incidents = kpi_score(total_incidents, target_incidents)
 
     # =========================
     # KPI DISPLAY
     # =========================
-    st.subheader("📊 KPI Performance")
+    st.subheader("📊 KPI Scorecard")
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric("TRIR", round(TRIR, 2), trir_status)
-    col2.metric("LTIFR", round(LTIFR, 2), ltifr_status)
-    col3.metric("Incidents", int(total_incidents), incident_status)
+    col1.metric("TRIR", round(TRIR, 2), f"Score: {score_trir}%")
+    col2.metric("LTIFR", round(LTIFR, 2), f"Score: {score_ltifr}%")
+    col3.metric("Incidents", int(total_incidents), f"Score: {score_incidents}%")
 
     # =========================
     # TREND ANALYSIS
     # =========================
-    st.subheader("📈 KPI Trends")
-
     if date_col:
+        df["Year"] = df[date_col].dt.year
         df["Month"] = df[date_col].dt.to_period("M").astype(str)
+
         trend = df.groupby("Month").sum(numeric_only=True).reset_index()
+        yearly = df.groupby("Year").sum(numeric_only=True).reset_index()
+
+        st.subheader("📈 Monthly Trend")
 
         if incident_col:
             fig1 = px.line(trend, x="Month", y=incident_col, title="Incident Trend")
             st.plotly_chart(fig1, use_container_width=True)
 
-        if manhours_col:
-            fig2 = px.line(trend, x="Month", y=manhours_col, title="Manhours Trend")
+    # =========================
+    # BENCHMARKING
+    # =========================
+    st.subheader("📊 Yearly Benchmark")
+
+    if date_col:
+        if incident_col:
+            fig2 = px.bar(yearly, x="Year", y=incident_col, title="Incidents by Year")
             st.plotly_chart(fig2, use_container_width=True)
 
+        if manhours_col:
+            fig3 = px.bar(yearly, x="Year", y=manhours_col, title="Manhours by Year")
+            st.plotly_chart(fig3, use_container_width=True)
+
     # =========================
-    # KPI VS TARGET CHART
+    # PERFORMANCE RATING
     # =========================
-    st.subheader("📊 KPI vs Target")
+    st.subheader("🏆 Overall Performance")
 
-    kpi_df = pd.DataFrame({
-        "KPI": ["TRIR", "LTIFR", "Incidents"],
-        "Actual": [TRIR, LTIFR, total_incidents],
-        "Target": [target_trir, target_ltifr, target_incidents]
-    })
+    avg_score = (score_trir + score_ltifr + score_incidents) / 3
 
-    fig3 = px.bar(kpi_df, x="KPI", y=["Actual", "Target"], barmode="group",
-                  title="KPI vs Target Comparison")
+    if avg_score >= 90:
+        rating = "🟢 Excellent"
+    elif avg_score >= 70:
+        rating = "🟡 Good"
+    else:
+        rating = "🔴 Needs Improvement"
 
-    st.plotly_chart(fig3, use_container_width=True)
+    st.metric("Overall HSE Score", f"{round(avg_score,1)}%", rating)
 
     # =========================
     # INSIGHTS
     # =========================
     st.subheader("🤖 Executive Insights")
 
-    st.write(f"TRIR Status: {trir_status}")
-    st.write(f"LTIFR Status: {ltifr_status}")
-    st.write(f"Incident Status: {incident_status}")
+    st.write(f"Overall performance rating: **{rating}**")
 
-    if incident_col:
-        worst_month = trend.loc[trend[incident_col].idxmax(), "Month"]
-        st.write(f"🚨 Highest incident month: **{worst_month}**")
+    if date_col and incident_col:
+        worst_year = yearly.loc[yearly[incident_col].idxmax(), "Year"]
+        st.write(f"🚨 Highest incident year: **{worst_year}**")
