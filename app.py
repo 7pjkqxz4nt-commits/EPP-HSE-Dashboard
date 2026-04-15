@@ -40,44 +40,100 @@ def send_email(pdf_buffer, receiver_email):
 # PDF FUNCTION
 # =========================
 def create_pdf(df, trend, TRIR, LTIFR, total_recordable):
+
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+    from io import BytesIO
+
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer)
     styles = getSampleStyleSheet()
+
     content = []
 
-    content.append(Paragraph("HSE KPI REPORT", styles['Title']))
-    content.append(Spacer(1, 15))
+    # =========================
+    # TITLE PAGE
+    # =========================
+    content.append(Paragraph("HSE EXECUTIVE REPORT", styles['Title']))
+    content.append(Spacer(1, 20))
 
-    # KPI Table
+    content.append(Paragraph("Health, Safety & Environment Performance Summary", styles['Normal']))
+    content.append(Spacer(1, 40))
+
+    content.append(PageBreak())
+
+    # =========================
+    # KPI SUMMARY
+    # =========================
+    content.append(Paragraph("1. KPI Summary", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
     kpi_data = [
         ["Metric", "Value"],
         ["TRIR", round(TRIR, 2)],
         ["LTIFR", round(LTIFR, 2)],
-        ["Total Recordable", int(total_recordable)]
+        ["Total Recordable Cases", int(total_recordable)]
     ]
 
     table = Table(kpi_data)
     table.setStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR',(0,0),(-1,0),colors.white),
         ('GRID', (0,0), (-1,-1), 1, colors.black)
     ])
-    content.append(table)
-    content.append(Spacer(1, 15))
 
-    # Charts
-    content.append(Paragraph("Charts Overview", styles['Heading2']))
+    content.append(table)
+    content.append(Spacer(1, 20))
+
+    # =========================
+    # INCIDENT SUMMARY
+    # =========================
+    content.append(Paragraph("2. Incident Breakdown", styles['Heading2']))
+
+    content.append(Paragraph(f"LTI Cases: {df['LWDC'].sum()}", styles['Normal']))
+    content.append(Paragraph(f"Medical Cases: {df['MTC'].sum()}", styles['Normal']))
+    content.append(Paragraph(f"First Aid Cases: {df['FAC'].sum()}", styles['Normal']))
+
+    content.append(Spacer(1, 20))
+
+    # =========================
+    # CHARTS
+    # =========================
+    content.append(Paragraph("3. Performance Trends", styles['Heading2']))
     content.append(Spacer(1, 10))
 
     charts = ["lti_chart.png", "trir_chart.png", "manhours_chart.png", "nearmiss_chart.png"]
 
     for chart in charts:
         try:
-            content.append(Image(chart, width=400, height=200))
-            content.append(Spacer(1, 10))
+            content.append(Image(chart, width=450, height=220))
+            content.append(Spacer(1, 15))
         except:
             pass
 
+    # =========================
+    # INSIGHTS
+    # =========================
+    content.append(Paragraph("4. Executive Insights", styles['Heading2']))
+    content.append(Spacer(1, 10))
+
+    worst_month = trend.loc[trend["LWDC"].idxmax(), "Month"]
+
+    content.append(Paragraph(f"Highest incident month: {worst_month}", styles['Normal']))
+
+    if TRIR < 1:
+        performance = "Excellent"
+    elif TRIR < 3:
+        performance = "Good"
+    else:
+        performance = "Needs Improvement"
+
+    content.append(Paragraph(f"Overall Performance: {performance}", styles['Normal']))
+
     doc.build(content)
     buffer.seek(0)
+
     return buffer
 
 # =========================
@@ -116,11 +172,24 @@ if file:
     # =========================
     # KPI DISPLAY
     # =========================
-    st.subheader("📊 KPIs")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("TRIR", round(TRIR, 2))
-    c2.metric("LTIFR", round(LTIFR, 2))
-    c3.metric("Total Recordable", int(total_recordable))
+   st.markdown("## 📊 Executive KPI Overview")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("TRIR", round(TRIR, 2))
+    if TRIR < 1:
+        st.success("Excellent Performance")
+    elif TRIR < 3:
+        st.warning("Moderate Risk")
+    else:
+        st.error("High Risk")
+
+with col2:
+    st.metric("LTIFR", round(LTIFR, 2))
+
+with col3:
+    st.metric("Total Recordable", int(total_recordable))
 
     # =========================
     # TREND
@@ -131,6 +200,19 @@ if file:
     trend["TRIR"] = (trend["LWDC"] + trend["MTC"] + trend["FAC"]) * 200000 / trend["Manhours"]
 
     st.plotly_chart(px.line(trend, x="Month", y="LWDC", title="LTI Trend"), use_container_width=True)
+
+    st.markdown("## 🤖 Executive Insights")
+
+worst_month = trend.loc[trend["LWDC"].idxmax(), "Month"]
+
+st.write(f"🔴 Highest incident month: **{worst_month}**")
+
+if TRIR < 1:
+    st.write("🟢 Overall performance is **Excellent**")
+elif TRIR < 3:
+    st.write("🟡 Performance is **Acceptable but needs monitoring**")
+else:
+    st.write("🔴 Immediate action required")
 
     # =========================
     # REPORTING
