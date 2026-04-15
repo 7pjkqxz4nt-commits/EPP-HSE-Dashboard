@@ -329,7 +329,7 @@ st.subheader("📄 Reporting")
 
 if st.button("Generate PDF"):
 
-    import matplotlib.pyplot as plt   ✅ IMPORTANT
+    import matplotlib.pyplot as plt  # IMPORTANT
 
     plt.figure(figsize=(8,4))
 
