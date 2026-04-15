@@ -177,7 +177,7 @@ st.markdown("## 📊 Executive KPI Overview")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric("TRIR", round(TRIR, 2))
+    st.metric("TRIR", round(TRIR, 2))  ✅ (4 spaces)
 
 with col2:
     st.metric("LTIFR", round(LTIFR, 2))
